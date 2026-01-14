@@ -20,35 +20,10 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 
 const InventoryManagement = () => {
   const { instance } = useMsal();
@@ -56,7 +31,6 @@ const InventoryManagement = () => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [syncStatus, setSyncStatus] = useState("idle");
-  const [lastSyncTime, setLastSyncTime] = useState(null);
   const [syncError, setSyncError] = useState(null);
   const [categories, setCategories] = useState([
     "Electronics",
@@ -142,12 +116,19 @@ const InventoryManagement = () => {
     const syncToExcel = async () => {
       if (!items.length) return;
 
+      // Check if user is authenticated before attempting sync
+      const accounts = instance.getAllAccounts();
+      if (accounts.length === 0) {
+        // No authenticated user - skip sync silently
+        setSyncStatus("idle");
+        return;
+      }
+
       setSyncStatus("syncing");
       setSyncError(null);
       try {
         await excelService.syncInventoryData(items);
         setSyncStatus("success");
-        setLastSyncTime(new Date());
       } catch (error) {
         console.error("Failed to sync with Excel:", error);
         setSyncStatus("error");
@@ -158,23 +139,7 @@ const InventoryManagement = () => {
     if (items.length > 0) {
       syncToExcel();
     }
-  }, [items, excelService, setSyncStatus, setSyncError, setLastSyncTime]); // Added excelService to dependencies
-
-  const handleManualSync = async () => {
-    if (syncStatus === "syncing") return;
-    setSyncStatus("syncing");
-    setSyncError(null);
-
-    try {
-      await excelService.syncInventoryData(items);
-      setSyncStatus("success");
-      setLastSyncTime(new Date());
-    } catch (error) {
-      console.error("Sync failed:", error);
-      setSyncStatus("error");
-      setSyncError(error.message);
-    }
-  };
+  }, [items, excelService, instance]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();

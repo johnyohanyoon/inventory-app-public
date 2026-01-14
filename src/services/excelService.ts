@@ -33,7 +33,7 @@ class ExcelService {
       } as SilentRequest);
 
     return Client.init({
-      authProvider: (done: (error: any, token?: string) => void) => {
+      authProvider: (done: (error: Error | null, token?: string) => void) => {
         done(null, accessToken.accessToken);
       },
     });

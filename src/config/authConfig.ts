@@ -2,7 +2,7 @@ export const msalConfig = {
     auth: {
         clientId: "YOUR_AZURE_CLIENT_ID", // Replace with your Azure App Registration Client ID
         authority: "https://login.microsoftonline.com/common",
-        redirectUri: "http://localhost:3000", // Update this for production
+        redirectUri: "http://localhost:5173", // Vite default port (update for production)
     },
     cache: {
         cacheLocation: "sessionStorage",
