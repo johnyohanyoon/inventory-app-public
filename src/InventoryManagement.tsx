@@ -6,6 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import { useCategories } from "@/hooks/useCategories";
+import { useInventoryForm } from "@/hooks/useInventoryForm";
 import { useMsal } from "@azure/msal-react";
 import ExcelService from "@/services/excelService";
 import Papa from "papaparse";
@@ -59,24 +60,22 @@ const InventoryManagement = () => {
     removeCategory,
   } = useCategories();
 
+  const {
+    formData,
+    isEditing,
+    newMarketplace,
+    setFormData,
+    setNewMarketplace,
+    handleAddMarketplace,
+    handleRemoveMarketplace,
+    resetForm,
+    setEditMode,
+  } = useInventoryForm();
+
   // useState hooks
   const [syncStatus, setSyncStatus] = useState("idle");
   const [syncError, setSyncError] = useState(null);
 
-  const [formData, setFormData] = useState<InventoryItem>({
-    id: "",
-    name: "",
-    quantity: "",
-    category: "",
-    price: "",
-    marketplaces: [],
-  });
-  const [isEditing, setIsEditing] = useState(false);
-  const [newMarketplace, setNewMarketplace] = useState({
-    platform: "",
-    listingPrice: "",
-    url: "",
-  });
   const [showCategoryManager, setShowCategoryManager] = useState(false);
 
   // useRef hooks
@@ -129,33 +128,19 @@ const InventoryManagement = () => {
     }
   };
 
+  // ACTIONS
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
       if (isEditing) {
-        // ✅ Use updateItem from hook instead of setItems
         updateItem(formData);
-        setIsEditing(false);
       } else {
-        // ✅ Use addItem from hook instead of setItems
         addItem({ ...formData, id: Date.now().toString() });
       }
-      setFormData({
-        id: "",
-        name: "",
-        quantity: "",
-        category: "",
-        price: "",
-        marketplaces: [],
-      });
+      resetForm();
     },
-    [isEditing, formData, addItem, updateItem],
+    [isEditing, formData, addItem, updateItem, resetForm],
   );
-
-  const handleEdit = useCallback((item: InventoryItem) => {
-    setFormData(item);
-    setIsEditing(true);
-  }, []);
 
   const handleDelete = useCallback(
     (id: string) => {
@@ -163,26 +148,6 @@ const InventoryManagement = () => {
       deleteItem(id);
     },
     [deleteItem],
-  );
-
-  const addMarketplace = useCallback(() => {
-    if (newMarketplace.platform && newMarketplace.listingPrice) {
-      setFormData({
-        ...formData,
-        marketplaces: [...formData.marketplaces, newMarketplace],
-      });
-      setNewMarketplace({ platform: "", listingPrice: "", url: "" });
-    }
-  }, [formData, newMarketplace]);
-
-  const removeMarketplace = useCallback(
-    (index: number) => {
-      setFormData({
-        ...formData,
-        marketplaces: formData.marketplaces.filter((_, i) => i !== index),
-      });
-    },
-    [formData],
   );
 
   // ✅ filteredItems now comes from useInventoryItems hook - removed duplicate
@@ -516,7 +481,7 @@ const InventoryManagement = () => {
                   <td className="p-4">
                     <div className="flex gap-2">
                       <Button
-                        onClick={() => handleEdit(item)}
+                        onClick={() => setEditMode(item)}
                         className="p-2 text-blue-500 hover:bg-blue-100 rounded"
                       >
                         <Edit2 size={20} />
@@ -646,7 +611,7 @@ const InventoryManagement = () => {
             </div>
             <Button
               type="button"
-              onClick={addMarketplace}
+              onClick={handleAddMarketplace}
               className="px-3 py-1 bg-green-500 text-white rounded-lg flex items-center gap-1 text-sm hover:bg-green-600"
             >
               <Plus size={16} />
@@ -675,7 +640,7 @@ const InventoryManagement = () => {
                     )}
                     <Button
                       type="button"
-                      onClick={() => removeMarketplace(index)}
+                      onClick={() => handleRemoveMarketplace(index)}
                       className="ml-auto text-red-500 hover:text-red-700"
                     >
                       <X size={16} />
