@@ -1,9 +1,18 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
+import { useCategories } from "@/hooks/useCategories";
 import { useMsal } from "@azure/msal-react";
 import ExcelService from "@/services/excelService";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { InventoryItem } from "@/types";
+import { useInventoryItems } from "@/hooks/useInventoryItems";
+import { MARKETPLACE_PLATFORMS } from "@/config/marketplaces";
 import {
   Search,
   PlusCircle,
@@ -26,40 +35,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const InventoryManagement = () => {
+  // HOOKS
+  // Third-party hooks
   const { instance } = useMsal();
   const excelService = useMemo(() => new ExcelService(instance), [instance]);
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+
+  // Custom hooks
+  const {
+    items,
+    filteredItems,
+    searchTerm,
+    addItem,
+    updateItem,
+    deleteItem,
+    setSearchTerm,
+  } = useInventoryItems();
+
+  const {
+    categories,
+    newCategory,
+    setNewCategory,
+    addCategory,
+    removeCategory,
+  } = useCategories();
+
+  // useState hooks
   const [syncStatus, setSyncStatus] = useState("idle");
   const [syncError, setSyncError] = useState(null);
-  const [categories, setCategories] = useState([
-    "Electronics",
-    "Clothing",
-    "Books",
-    "Home & Garden",
-    "Toys",
-    "Sports Equipment",
-    "Other", // 'Other' will always be last
-  ]);
-
-  const fileInputRef = useRef(null);
-
-  // Fixes the error of exiting out before MS login
-  const handleLogin = async () => {
-    try {
-      await instance.loginPopup();
-      // Successfully logged in
-      // You can add a success message here if you want
-    } catch (error) {
-      if (error.errorCode === "user_cancelled") {
-        // User closed the popup - this is normal, no need to show an error
-        console.log("Login cancelled");
-      } else {
-        // Handle other errors
-        console.error("Login failed:", error);
-      }
-    }
-  };
 
   const [formData, setFormData] = useState<InventoryItem>({
     id: "",
@@ -75,43 +77,12 @@ const InventoryManagement = () => {
     listingPrice: "",
     url: "",
   });
-  const [newCategory, setNewCategory] = useState("");
   const [showCategoryManager, setShowCategoryManager] = useState(false);
 
-  // Available marketplace platforms
-  const marketplacePlatforms = [
-    "Amazon",
-    "eBay",
-    "Etsy",
-    "Facebook Marketplace",
-    "Other",
-  ];
+  // useRef hooks
+  const fileInputRef = useRef(null);
 
-  // Load data from localStorage
-  useEffect(() => {
-    const savedItems = localStorage.getItem("inventoryItems");
-    const savedCategories = localStorage.getItem("inventoryCategories");
-    if (savedItems) setItems(JSON.parse(savedItems));
-    if (savedCategories) {
-      // Ensure 'Other' is always at the end when loading saved categories
-      const loadedCategories = JSON.parse(savedCategories);
-      const categoriesWithoutOther = loadedCategories.filter(
-        (cat) => cat !== "Other"
-      );
-      setCategories([...categoriesWithoutOther, "Other"]);
-    }
-  }, []);
-
-  // Save data to localStorage
-  useEffect(() => {
-    localStorage.setItem("inventoryItems", JSON.stringify(items));
-  }, [items]);
-
-  useEffect(() => {
-    localStorage.setItem("inventoryCategories", JSON.stringify(categories));
-  }, [categories]);
-
-  // Add this useEffect for real-time sync
+  // useEffect hooks
   useEffect(() => {
     const syncToExcel = async () => {
       if (!items.length) return;
@@ -141,34 +112,58 @@ const InventoryManagement = () => {
     }
   }, [items, excelService, instance]);
 
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    if (isEditing) {
-      setItems(
-        items.map((item) => (item.id === formData.id ? formData : item))
-      );
-      setIsEditing(false);
-    } else {
-      setItems([...items, { ...formData, id: Date.now().toString() }]);
+  // HANDLER FUNCTIONS
+  // Fixes the error of exiting out before MS login
+  const handleLogin = async () => {
+    try {
+      await instance.loginPopup();
+      // Successfully logged in
+    } catch (error) {
+      if (error.errorCode === "user_cancelled") {
+        // Handle if user exits popup
+        console.log("Login cancelled");
+      } else {
+        // Handle other errors
+        console.error("Login failed:", error);
+      }
     }
-    setFormData({
-      id: "",
-      name: "",
-      quantity: "",
-      category: "",
-      price: "",
-      marketplaces: [],
-    });
-  }, [isEditing, formData, items]);
+  };
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      if (isEditing) {
+        // ✅ Use updateItem from hook instead of setItems
+        updateItem(formData);
+        setIsEditing(false);
+      } else {
+        // ✅ Use addItem from hook instead of setItems
+        addItem({ ...formData, id: Date.now().toString() });
+      }
+      setFormData({
+        id: "",
+        name: "",
+        quantity: "",
+        category: "",
+        price: "",
+        marketplaces: [],
+      });
+    },
+    [isEditing, formData, addItem, updateItem],
+  );
 
   const handleEdit = useCallback((item: InventoryItem) => {
     setFormData(item);
     setIsEditing(true);
   }, []);
 
-  const handleDelete = useCallback((id: string) => {
-    setItems(items.filter((item) => item.id !== id));
-  }, [items]);
+  const handleDelete = useCallback(
+    (id: string) => {
+      // ✅ Use deleteItem from hook instead of setItems
+      deleteItem(id);
+    },
+    [deleteItem],
+  );
 
   const addMarketplace = useCallback(() => {
     if (newMarketplace.platform && newMarketplace.listingPrice) {
@@ -180,40 +175,26 @@ const InventoryManagement = () => {
     }
   }, [formData, newMarketplace]);
 
-  const removeMarketplace = useCallback((index: number) => {
-    setFormData({
-      ...formData,
-      marketplaces: formData.marketplaces.filter((_, i) => i !== index),
+  const removeMarketplace = useCallback(
+    (index: number) => {
+      setFormData({
+        ...formData,
+        marketplaces: formData.marketplaces.filter((_, i) => i !== index),
+      });
+    },
+    [formData],
+  );
+
+  // ✅ filteredItems now comes from useInventoryItems hook - removed duplicate
+
+  const handleRemoveCategory = (categoryToRemove: string) => {
+    removeCategory(categoryToRemove); // from hook
+    items.forEach((item) => {
+      if (item.category === categoryToRemove) {
+        updateItem({ ...item, category: "Other" });
+      }
     });
-  }, [formData]);
-
-  const addCategory = useCallback(() => {
-    if (newCategory && !categories.includes(newCategory)) {
-      const categoriesWithoutOther = categories.filter(
-        (cat) => cat !== "Other"
-      );
-      setCategories([...categoriesWithoutOther, newCategory, "Other"]);
-      setNewCategory("");
-    }
-  }, [categories, newCategory]);
-
-  const removeCategory = useCallback((categoryToRemove: string) => {
-    setCategories(categories.filter((cat) => cat !== categoryToRemove));
-    setItems(
-      items.map((item) => ({
-        ...item,
-        category: item.category === categoryToRemove ? "Other" : item.category,
-      }))
-    );
-  }, [categories, items]);
-
-  const filteredItems = useMemo(() => {
-    return items.filter(
-      (item) =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [items, searchTerm]);
+  };
 
   const exportToCSV = () => {
     // Prepare data for export
@@ -225,7 +206,7 @@ const InventoryManagement = () => {
       "Marketplace Listings": item.marketplaces
         .map(
           (m) =>
-            `${m.platform}: $${m.listingPrice}${m.url ? ` (${m.url})` : ""}`
+            `${m.platform}: $${m.listingPrice}${m.url ? ` (${m.url})` : ""}`,
         )
         .join("; "),
     }));
@@ -254,7 +235,7 @@ const InventoryManagement = () => {
       "Marketplace Listings": item.marketplaces
         .map(
           (m) =>
-            `${m.platform}: $${m.listingPrice}${m.url ? ` (${m.url})` : ""}`
+            `${m.platform}: $${m.listingPrice}${m.url ? ` (${m.url})` : ""}`,
         )
         .join("; "),
     }));
@@ -265,36 +246,39 @@ const InventoryManagement = () => {
     XLSX.writeFile(wb, "inventory_export.xlsx");
   };
 
-  const processImportedData = (data) => {
-    const newItems = data.map((row) => {
+  const processImportedData = (data: any[]) => {
+    // ✅ Use addItem from hook for each imported item
+    data.forEach((row) => {
       let marketplaces = [];
       if (row["Marketplace Listings"]) {
-        marketplaces = row["Marketplace Listings"].split(";").map((listing) => {
-          const [platformPrice, url] = listing.split("(");
-          const [platform, price] = platformPrice.split(":");
-          return {
-            platform: platform.trim(),
-            listingPrice: price ? price.replace("$", "").trim() : "",
-            url: url ? url.replace(")", "").trim() : "",
-          };
-        });
+        marketplaces = row["Marketplace Listings"]
+          .split(";")
+          .map((listing: string) => {
+            const [platformPrice, url] = listing.split("(");
+            const [platform, price] = platformPrice.split(":");
+            return {
+              platform: platform.trim(),
+              listingPrice: price ? price.replace("$", "").trim() : "",
+              url: url ? url.replace(")", "").trim() : "",
+            };
+          });
       }
 
-      return {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      const newItem: InventoryItem = {
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
         name: row.Name || row.name || "",
         quantity: row.Quantity || row.quantity || 0,
         category: row.Category || row.category || "Other",
         price: row["Cost Price"] || row.price || 0,
         marketplaces: marketplaces,
       };
-    });
 
-    setItems((prevItems) => [...prevItems, ...newItems]);
+      addItem(newItem);
+    });
   };
 
   const handleFileUpload = (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: React.ChangeEvent<HTMLInputElement>,
   ): void => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -454,7 +438,7 @@ const InventoryManagement = () => {
                   {category}
                   {category !== "Other" && (
                     <Button
-                      onClick={() => removeCategory(category)}
+                      onClick={() => handleRemoveCategory(category)}
                       className="text-red-500 hover:text-red-700"
                     >
                       <X size={16} />
@@ -475,21 +459,29 @@ const InventoryManagement = () => {
                 <th className="p-4 text-left text-white">Quantity</th>
                 <th className="p-4 text-left text-white">Category</th>
                 <th className="p-4 text-left text-white">Cost Price</th>
-                <th className="p-4 text-left text-white">Marketplace Listings</th>
+                <th className="p-4 text-left text-white">
+                  Marketplace Listings
+                </th>
                 <th className="p-4 text-left text-white">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredItems.map((item) => (
                 <tr key={item.id} className="border-b hover:bg-gray-50">
-                  <td className="p-4 text-gray-900 dark:text-white">{item.name}</td>
-                  <td className="p-4 text-gray-900 dark:text-white">{item.quantity}</td>
+                  <td className="p-4 text-gray-900 dark:text-white">
+                    {item.name}
+                  </td>
+                  <td className="p-4 text-gray-900 dark:text-white">
+                    {item.quantity}
+                  </td>
                   <td className="p-4">
                     <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
                       {item.category}
                     </span>
                   </td>
-                  <td className="p-4 text-gray-900 dark:text-white">${Number(item.price).toFixed(2)}</td>
+                  <td className="p-4 text-gray-900 dark:text-white">
+                    ${Number(item.price).toFixed(2)}
+                  </td>
                   <td className="p-4">
                     {item.marketplaces?.length > 0 ? (
                       <div className="flex flex-col gap-1">
@@ -619,9 +611,9 @@ const InventoryManagement = () => {
                 className="p-2 border rounded"
               >
                 <option value="">Select Platform</option>
-                {marketplacePlatforms.map((platform) => (
-                  <option key={platform} value={platform}>
-                    {platform}
+                {MARKETPLACE_PLATFORMS.map((platform) => (
+                  <option key={platform.id} value={platform.name}>
+                    {platform.name}
                   </option>
                 ))}
               </select>
