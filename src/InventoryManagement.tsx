@@ -35,6 +35,19 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+// Type for imported CSV/Excel row data
+interface ImportedInventoryRow {
+  Name?: string;
+  name?: string;
+  Quantity?: number | string;
+  quantity?: number | string;
+  Category?: string;
+  category?: string;
+  "Cost Price"?: number | string;
+  price?: number | string;
+  "Marketplace Listings"?: string;
+}
+
 const InventoryManagement = () => {
   // HOOKS
   // Third-party hooks
@@ -211,7 +224,7 @@ const InventoryManagement = () => {
     XLSX.writeFile(wb, "inventory_export.xlsx");
   };
 
-  const processImportedData = (data: any[]) => {
+  const processImportedData = (data: ImportedInventoryRow[]) => {
     // ✅ Use addItem from hook for each imported item
     data.forEach((row) => {
       let marketplaces = [];
